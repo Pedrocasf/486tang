@@ -1,5 +1,5 @@
 # SD card image created with ../tools/mksdcard.py
-SDCARD = sdcard_debug.img
+SDCARD = sdcard.img
 
 #------------------------------------------------------------------------------
 # No user changes needed below this line
@@ -32,10 +32,10 @@ SOURCES = $D/system.sv $D/ao486/ao486.v $D/ao486/exception.v $D/ao486/global_reg
 		  $D/soc/pit.v $D/soc/ps2.v $D/soc/rtc.v $D/soc/vga.v $D/common/dpram.v $D/common/simple_ram.v \
 		  $D/common/simple_fifo.v $D/common/ps2_device.v $D/common/simple_mult.v $D/common/uart_tx_V2.v $D/cache/l1_icache.v \
 		  $D/common/synchronizer.sv $D/common/cdc_vector_handshake_continuous.sv \
-		  $D/soc/sound/sound.v $D/soc/sound/sound_dsp.v $D/soc/sound/opl3/afifo.v $D/soc/sound/opl3/phase_generator.sv \
+		  $D/soc/sound/sound.v $D/soc/sound/sound_dsp.v $D/soc/sound/opl3/opl3_pkg.sv $D/soc/sound/opl3/afifo.v $D/soc/sound/opl3/phase_generator.sv \
 		  $D/soc/sound/opl3/mem_simple_dual_port.sv $D/soc/sound/opl3/calc_envelope_shift.sv $D/soc/sound/opl3/operator.sv \
 		  $D/soc/sound/opl3/calc_phase_inc.sv $D/soc/sound/opl3/opl3_exp_lut.sv $D/soc/sound/opl3/calc_rhythm_phase.sv \
-		  $D/soc/sound/opl3/opl3_log_sine_lut.sv $D/soc/sound/opl3/channels.sv $D/soc/sound/opl3/opl3_pkg.sv \
+		  $D/soc/sound/opl3/opl3_log_sine_lut.sv $D/soc/sound/opl3/channels.sv \
 		  $D/soc/sound/opl3/clk_div.sv $D/soc/sound/opl3/control_operators.sv $D/soc/sound/opl3/dac_prep.sv \
 		  $D/soc/sound/opl3/edge_detector.sv $D/soc/sound/opl3/envelope_generator.sv $D/soc/sound/opl3/host_if.sv \
 		  $D/soc/sound/opl3/ksl_add_rom.sv $D/soc/sound/opl3/leds.sv $D/soc/sound/opl3/mem_multi_bank_reset.sv \

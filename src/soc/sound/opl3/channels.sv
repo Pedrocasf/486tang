@@ -107,7 +107,7 @@ module channels
         .banka(opl3_reg_wr.bank_num),
         .addra(opl3_reg_wr.address[$clog2('h9)-1:0]),
         .bankb(self.bank_num),
-        .addrb(signals.ch_abcd_cnt_mem_channel_num),
+        .addrb(ch_abcd_cnt_mem_channel_num),
         .dia(opl3_reg_wr.data),
         .dob({chd, chc, chb, cha, fb_dummy, cnt})
     );
@@ -157,11 +157,11 @@ module channels
         logic signed [CHANNEL_ACCUMULATOR_WIDTH-1:0] channel_r_acc_pre_clamp;
     } self = 0, next_self;
 
-    // verilator lint_off UNOPTFLAT
+    logic [$clog2(NUM_CHANNELS_PER_BANK)-1:0] ch_abcd_cnt_mem_channel_num;
+
     struct packed {
         logic [$clog2(NUM_OPERATORS_PER_BANK)-1:0] op_mem_op_num;
         logic op_mem_rd;
-        logic [$clog2(NUM_CHANNELS_PER_BANK)-1:0] ch_abcd_cnt_mem_channel_num;
         logic signed [CHANNEL_OUT_WIDTH-1:0] channel_out;
         logic latch_channels;
         logic add_a;
@@ -169,7 +169,18 @@ module channels
         logic add_c;
         logic add_d;
     } signals;
-    // verilator lint_on UNOPTFLAT
+
+    always_comb begin
+        ch_abcd_cnt_mem_channel_num = 0;
+
+        unique case (state)
+        LOAD_2_OP_FIRST_AND_ACCUMULATE: ch_abcd_cnt_mem_channel_num = self.channel_num;
+        LOAD_4_OP_THIRD_1:              ch_abcd_cnt_mem_channel_num = self.channel_num + 3;
+        LOAD_4_OP_SECOND:               ch_abcd_cnt_mem_channel_num = self.channel_num;
+        LOAD_4_OP_FIRST_AND_ACCUMULATE: ch_abcd_cnt_mem_channel_num = self.channel_num;
+        default:;
+        endcase
+    end
 
     always_ff @(posedge clk)
         if (sample_clk_en) begin
@@ -203,7 +214,6 @@ module channels
             signals.op_mem_rd = 1;
         end
         LOAD_2_OP_FIRST_AND_ACCUMULATE: begin
-            signals.ch_abcd_cnt_mem_channel_num = self.channel_num;
             signals.channel_out = cnt ? operator_mem_out + self.operator_out_second : self.operator_out_second;
             if (ryt && self.bank_num == 0)
                 unique case (self.channel_num)
@@ -294,18 +304,15 @@ module channels
             signals.op_mem_op_num = self.channel_num + 6;
             signals.op_mem_rd = 1;
             next_self.operator_out_third = operator_mem_out;
-            signals.ch_abcd_cnt_mem_channel_num = self.channel_num + 3;
             next_self.cnt_second = cnt;
         end
         LOAD_4_OP_SECOND: begin
             next_state = LOAD_4_OP_FIRST_AND_ACCUMULATE;
-            signals.ch_abcd_cnt_mem_channel_num = self.channel_num;
             signals.op_mem_op_num = {cnt, self.cnt_second} == 'b01 ? self.channel_num + 3 : self.channel_num;
             signals.op_mem_rd = 1;
             next_self.operator_out_second = operator_mem_out;
         end
         LOAD_4_OP_FIRST_AND_ACCUMULATE: begin
-            signals.ch_abcd_cnt_mem_channel_num = self.channel_num;
             unique case ({cnt, self.cnt_second})
             'b00: signals.channel_out = self.operator_out_third;
             'b01: signals.channel_out = operator_mem_out + self.operator_out_third;

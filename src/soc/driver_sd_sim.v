@@ -1,4 +1,5 @@
 // SD card module for ao486 simulation.
+// Uses file-backed I/O via DPI instead of a huge Verilog array.
 // nand2mario, 7/2024
 module driver_sd (
     input               clk,
@@ -44,19 +45,27 @@ reg [31:0] base_address;
 reg [23:0] sd_sector;
 reg [7:0] sd_sector_count;
 
-localparam SD_BUF_SIZE = 128*1024*1024;
-logic [7:0] sd_buf[0:SD_BUF_SIZE-1] /* verilator public */;
-int unsigned sd_size;
+import "DPI-C" function int unsigned sd_read_dword(input int unsigned byte_addr);
+import "DPI-C" function void sd_write_byte_dpi(input int unsigned byte_addr, input byte unsigned data);
+
+localparam SMALL_BUF_SIZE = 512*1024;
+logic [7:0] sd_buf[0:SMALL_BUF_SIZE-1] /* verilator public */;
 
 export "DPI-C" task sd_write;
 task sd_write(
     input  int unsigned        addr,
     input  byte unsigned       data
 );
-    // if (addr < 16) $display("DPI sd_write(%m): addr=%x, data=%02x", addr, data);
-    if (addr >= SD_BUF_SIZE) $display("sd_write overflow: %x >= %x", addr, SD_BUF_SIZE);
-    sd_buf[addr] = data;
+    if (addr < SMALL_BUF_SIZE)
+        sd_buf[addr] = data;
 endtask
+
+function [31:0] sd_read4(input [29:0] addr);
+    if (addr + 3 < SMALL_BUF_SIZE)
+        sd_read4 = {sd_buf[addr+3], sd_buf[addr+2], sd_buf[addr+1], sd_buf[addr]};
+    else
+        sd_read4 = sd_read_dword(addr);
+endfunction
 
 // initial $readmemh("dos6.vhd.hex", sd_buf);
 
@@ -116,16 +125,10 @@ always @(posedge clk) begin
             end
             READ: begin
                 avm_write <= 1;
-                avm_writedata <= {sd_buf[sd_buf_ptr+3], sd_buf[sd_buf_ptr+2], sd_buf[sd_buf_ptr+1], sd_buf[sd_buf_ptr]};
-                // Debug: show first few reads to verify SD card data
-                // if (sd_buf_ptr < 32) begin
-                //     $display("SD READ (%m): ptr=%x, data=%02x%02x%02x%02x", sd_buf_ptr,
-                //              sd_buf[sd_buf_ptr+3], sd_buf[sd_buf_ptr+2], 
-                //              sd_buf[sd_buf_ptr+1], sd_buf[sd_buf_ptr]);
-                // end
+                avm_writedata <= sd_read4(sd_buf_ptr);
                 if (avm_write && !avm_waitrequest) begin     // handshake
                     sd_buf_ptr <= sd_buf_ptr + 4;
-                    avm_writedata <= {sd_buf[sd_buf_ptr+7], sd_buf[sd_buf_ptr+6], sd_buf[sd_buf_ptr+5], sd_buf[sd_buf_ptr+4]};
+                    avm_writedata <= sd_read4(sd_buf_ptr + 4);
                     avm_address <= avm_address + 4;
                     if (sd_buf_ptr + 4 == sd_buf_ptr_end) begin
                         avm_write <= 0;
@@ -134,11 +137,18 @@ always @(posedge clk) begin
                 end
             end
             WRITE: if (avm_readdatavalid) begin  // drive hdd-to-sd streaming with avm_read
-                $display("WRITE: sd[%x]=%x", sd_buf_ptr, avm_readdata);
-                sd_buf[sd_buf_ptr] <= avm_readdata[7:0];
-                sd_buf[sd_buf_ptr+1] <= avm_readdata[15:8];
-                sd_buf[sd_buf_ptr+2] <= avm_readdata[23:16];
-                sd_buf[sd_buf_ptr+3] <= avm_readdata[31:24];
+                if (sd_buf_ptr < SMALL_BUF_SIZE)
+                    sd_buf[sd_buf_ptr] <= avm_readdata[7:0];
+                if (sd_buf_ptr + 1 < SMALL_BUF_SIZE)
+                    sd_buf[sd_buf_ptr+1] <= avm_readdata[15:8];
+                if (sd_buf_ptr + 2 < SMALL_BUF_SIZE)
+                    sd_buf[sd_buf_ptr+2] <= avm_readdata[23:16];
+                if (sd_buf_ptr + 3 < SMALL_BUF_SIZE)
+                    sd_buf[sd_buf_ptr+3] <= avm_readdata[31:24];
+                sd_write_byte_dpi(sd_buf_ptr,   avm_readdata[7:0]);
+                sd_write_byte_dpi(sd_buf_ptr+1, avm_readdata[15:8]);
+                sd_write_byte_dpi(sd_buf_ptr+2, avm_readdata[23:16]);
+                sd_write_byte_dpi(sd_buf_ptr+3, avm_readdata[31:24]);
                 sd_buf_ptr <= sd_buf_ptr + 4;
                 if (sd_buf_ptr + 4 == sd_buf_ptr_end)
                     state <= IDLE;
